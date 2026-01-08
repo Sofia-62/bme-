@@ -1,1 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Smart Weather Station Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<style>
+:root{
+    --primary:#1e3c72;
+    --accent:#2a5298;
+    --bg:#f4f6f9;
+    --card:#ffffff;
+    --shadow:0 12px 30px rgba(0,0,0,0.1);
+    --radius:14px;
+}
+
+body{
+    margin:0;
+    font-family:"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:#2c3e50;
+}
+
+header{
+    background:linear-gradient(135deg,var(--primary),var(--accent));
+    color:white;
+    padding:35px 20px;
+    text-align:center;
+}
+
+main{
+    max-width:1400px;
+    margin:auto;
+    padding:30px;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(420px,1fr));
+    gap:25px;
+}
+
+.card{
+    background:var(--card);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:20px;
+}
+
+.card h2{
+    margin-top:0;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.info{
+    font-size:14px;
+    color:#555;
+    margin-bottom:10px;
+}
+
+button{
+    background:var(--accent);
+    color:white;
+    border:none;
+    padding:8px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:14px;
+}
+
+button:hover{
+    opacity:0.9;
+}
+
+.chart{
+    display:none;
+    margin-top:15px;
+}
+
+iframe{
+    width:100%;
+    height:260px;
+    border:none;
+    border-radius:10px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:15px;
+}
+
+th,td{
+    padding:12px;
+    border-bottom:1px solid #ddd;
+    text-align:center;
+}
+
+th{
+    background:var(--accent);
+    color:white;
+}
+
+footer{
+    text-align:center;
+    margin:40px 0;
+    font-size:14px;
+    color:#555;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>🌦️ Smart Weather Station Dashboard</h1>
+<p>Historical Monitoring from 1 January (Malaysia Time)</p>
+</header>
+
+<main>
+
+<div class="grid">
+
+<div class="card">
+<h2>🌡️ Temperature (°C)</h2>
+<p class="info">Ambient temperature measured using BME280.</p>
+<button onclick="toggleChart('temp')">📊 View Graph</button>
+<div id="temp" class="chart">
+<iframe src="https://thingspeak.com/channels/3218142/charts/1?api_key=CD3R84AROYXS7HND&start=2026-01-01T00:00:00&results=800&dynamic=true&type=line"></iframe>
+</div>
+</div>
+
+<div class="card">
+<h2>💧 Humidity (%)</h2>
+<p class="info">Relative humidity of surrounding air.</p>
+<button onclick="toggleChart('hum')">📊 View Graph</button>
+<div id="hum" class="chart">
+<iframe src="https://thingspeak.com/channels/3218142/charts/2?api_key=CD3R84AROYXS7HND&start=2026-01-01T00:00:00&results=800&dynamic=true&type=line"></iframe>
+</div>
+</div>
+
+<div class="card">
+<h2>🌬️ Air Pressure (hPa)</h2>
+<p class="info">Atmospheric pressure for weather analysis.</p>
+<button onclick="toggleChart('pres')">📊 View Graph</button>
+<div id="pres" class="chart">
+<iframe src="https://thingspeak.com/channels/3218142/charts/3?api_key=CD3R84AROYXS7HND&start=2026-01-01T00:00:00&results=800&dynamic=true&type=line"></iframe>
+</div>
+</div>
+
+<div class="card">
+<h2>🍃 Wind Speed (rot/s)</h2>
+<p class="info">Estimated from reed switch rotation.</p>
+<button onclick="toggleChart('wind')">📊 View Graph</button>
+<div id="wind" class="chart">
+<iframe src="https://thingspeak.com/channels/3218142/charts/4?api_key=CD3R84AROYXS7HND&start=2026-01-01T00:00:00&results=800&dynamic=true&type=line"></iframe>
+</div>
+</div>
+
+</div>
+
+<div class="card" style="margin-top:30px;">
+<h2>📊 Data Summary (From 1 January)</h2>
+
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Latest</th>
+<th>Min</th>
+<th>Max</th>
+<th>Average</th>
+<th>Last Updated (MYT)</th>
+</tr>
+</thead>
+<tbody id="dataTable">
+<tr><td colspan="6">Loading...</td></tr>
+</tbody>
+</table>
+</div>
+
+</main>
+
+<footer>
+<strong>FSKM UMT</strong> | CSM3313 Internet of Things<br>
+Smart Pico W Weather Monitoring System
+</footer>
+
+<script>
+function toggleChart(id){
+    document.querySelectorAll(".chart").forEach(c => c.style.display="none");
+    const el = document.getElementById(id);
+    el.style.display = el.style.display === "block" ? "none" : "block";
+}
+
+const CHANNEL = "3218142";
+const KEY = "CD3R84AROYXS7HND";
+const STORAGE_KEY = "weather_history";
+const START_DATE = "2026-01-01T00:00:00";
+
+async function loadData(){
+    const res = await fetch(
+        `https://api.thingspeak.com/channels/${CHANNEL}/feeds.json?api_key=${KEY}&start=${START_DATE}&results=800`
+    );
+    const data = await res.json();
+
+    let history = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+    data.feeds.forEach(f => {
+        if (!history.some(h => h.created_at === f.created_at)) {
+            history.push(f);
+        }
+    });
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    renderTable(history);
+}
+
+function renderTable(feeds){
+    const fields = {
+        "Temperature (°C)": "field1",
+        "Humidity (%)": "field2",
+        "Pressure (hPa)": "field3",
+        "Wind Speed (rot/s)": "field4"
+    };
+
+    let html = "";
+
+    for (const [name, field] of Object.entries(fields)) {
+        const values = feeds.map(f => parseFloat(f[field])).filter(v => !isNaN(v));
+        if (!values.length) continue;
+
+        const lastTime = new Date(feeds.at(-1).created_at)
+            .toLocaleString("en-MY",{timeZone:"Asia/Kuala_Lumpur"});
+
+        html += `
+        <tr>
+            <td>${name}</td>
+            <td>${values.at(-1).toFixed(2)}</td>
+            <td>${Math.min(...values).toFixed(2)}</td>
+            <td>${Math.max(...values).toFixed(2)}</td>
+            <td>${(values.reduce((a,b)=>a+b,0)/values.length).toFixed(2)}</td>
+            <td>${lastTime}</td>
+        </tr>`;
+    }
+
+    document.getElementById("dataTable").innerHTML = html;
+}
+
+loadData();
+setInterval(loadData, 30000);
+</script>
+
+</body>
+</html>
